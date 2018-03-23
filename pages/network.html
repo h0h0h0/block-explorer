@@ -1,0 +1,198 @@
+<style>
+    #network_rows > tr > td{
+        vertical-align: middle;
+        font-family: 'Inconsolata', monospace;
+        font-size: 0.90em;
+    }
+    .blocksStatHolder > span{
+        display: inline-block;
+        border-radius: 5px;
+        padding: 1px 9px;
+        border: 1px solid #e5e5e5;
+        margin: 2px;
+    }
+    .blocksStatHolder > span > span{
+        font-weight: bold;
+    }
+    .table>tfoot>tr>th{
+        border-top: 2px solid #000;
+        font-size: 0.90em;
+        /*font-weight: 300;*/
+        font-weight: normal;
+    }
+    #averageWindow{
+        font-size: 0.6em;
+    }
+</style>
+
+<div class="blocksStatHolder">
+    <span class="bg-primary">Height: <span id="networkLastReward"></span></span>
+    <span class="bg-primary">Global hash Rate: <span id="networkHashrate"></span></span>
+    <span class="bg-primary">Last block difficulty: <span id="networkDifficulty"></span></span>
+</div>
+
+<hr>
+
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th><span id="network-symbol"></span> Pools</th>
+                <th><i class="fa fa-bars"></i> Height</th>
+                <th><i class="fa fa-tachometer"></i> Hashrate</th>
+                <th><i class="fa fa-group"></i> Miners</th>
+                <th><i class="fa fa-clock-o"></i> Last Block Found</th>
+                <th><i class="fa fa-gift"></i> Donations</th>
+                <th><i class="fa fa-money"></i> Total pool fees</th>
+            </tr>
+        </thead>
+        <tbody id="network_rows">
+        </tbody>
+        <tfoot>
+        <tr>
+            <th>Overall stats</th>
+            <th><span id=height></span></th>
+            <th><span id=hashrate></span> <span id=averageWindow></span></th>
+            <th><span id=miners></th>
+            <th><span style="font-size: 0.7em;" id=lastFound></th>
+            <th><span id=totalDonations></span></th>
+            <th><span id=totalFees></span></th>
+        </tr>
+        </tfoot>
+    </table>
+</div>
+
+<script>
+    function fmtMSS(s){return " (av. " + Math.floor(s / 60)+"mn)"}
+
+    currentPage = {
+        destroy: function(){
+        },
+        init: function(){
+            updateText('network-symbol', lastStats.config.symbol);
+            updateText('networkLastReward', lastStats.network.height.toString());
+            updateText('networkHashrate', getReadableHashRateString(lastStats.network.difficulty / coinDifficultyTarget));
+            updateText('networkDifficulty', lastStats.network.difficulty.toString());
+        },
+        update: function(){
+            updateText('networkLastReward', lastStats.network.height.toString());
+            updateText('networkHashrate', getReadableHashRateString(lastStats.network.difficulty / coinDifficultyTarget));
+            updateText('networkDifficulty', lastStats.network.difficulty.toString());
+            totalPools=0;
+            maxHeight=0;
+            totalHashrate=0;
+            totalMiners=0;
+            lastFound=0;
+            averageWindow=0;
+            totalDonations=0;
+            totalFees=0;
+            globalHashrate = lastStats.network.difficulty / coinDifficultyTarget;
+
+            const NETWORK_STAT_MAP = new Map(networkStat[lastStats.config.symbol.toLowerCase()]);
+            NETWORK_STAT_MAP.forEach((url, host, map) => {
+                $.getJSON(url + '/stats', (data, textStatus, jqXHR) => {
+                    warnIconId = 'warn_icon-'+host;
+                    // document.getElementById(warn_icon).classList.remove('hidden');
+
+                    poolHashrate=data.pool.hashrate;
+                    poolCoeff=poolHashrate/globalHashrate;
+                    // console.log('url='+url+' > '+ url.includes("tk"));
+        // || url.indexOf('tk') !== -1
+
+                    if((lastStats.network.height - data.network.height) > 2 || url.includes("cashpool")){
+                        $("#warnIconId").removeClass("hidden");
+                        hashrate="N/A";
+                        miners="N/A";
+                        poolCoeff=0;
+                        poolHashrate=0;
+                    } else {
+                        $("#warnIconId").addClass("hidden");
+
+                        hashrate=getReadableHashRateString(data.pool.hashrate);
+                        averageWindow+=data.config.hashrateWindow;
+                        totalPools+=1;
+                        maxHeight=Math.max(maxHeight,data.network.height);
+                        totalHashrate += poolHashrate;
+                        miners=data.pool.miners;
+                        totalMiners+=miners;
+                        lastFound=Math.max(lastFound,data.pool.lastBlockFound);
+                        totalFees+=calculateTotalFee(data)*poolCoeff;
+                        totalDonations+=calculateDonations(data)*poolCoeff;
+
+                    }
+                    updateText('height-'+host, data.network.height);
+                    updateText('hashrate-'+host,hashrate);
+                    updateText('miners-'+host,miners);
+                    updateText('lastBlockFound-'+host, jQuery.timeago(new Date(parseInt(data.pool.lastBlockFound))));
+                    updateText('donation-'+host, calculateDonations(data)+'%');
+                    updateText('totalFee-'+host, calculateTotalFee(data)+'%');
+                    //Global stats
+                    updateText('height', maxHeight);
+                    updateText('hashrate', getReadableHashRateString(totalHashrate));
+                    updateText('averageWindow', fmtMSS(averageWindow/totalPools));
+                    updateText('miners', totalMiners);
+                    updateText('lastFound', jQuery.timeago(new Date(parseInt(lastFound))));
+                    updateText('totalFees', (totalFees).toFixed(2)+'%');
+                    updateText('totalDonations', (totalDonations).toFixed(2)+'%');
+                });
+
+            });
+        }
+    };
+
+    const NETWORK_STAT_MAP = new Map(networkStat[lastStats.config.symbol.toLowerCase()]);
+
+    NETWORK_STAT_MAP.forEach((url, host, map) => {
+        $.getJSON(url + '/stats', (data, textStatus, jqXHR) => {
+            warn = "hidden";
+            if((lastStats.network.height - data.network.height) > 1 || url.includes("cashpool")){
+                warn = ""
+                hashrate="N/A";
+                miners="N/A";
+            } else {
+                hashrate=getReadableHashRateString(data.pool.hashrate);
+                miners=data.pool.miners;
+            }
+
+            $('#network_rows').append('<tr>' +
+                '<td id=host-'+host+'><i id="warn_icon-'+host+'" class="'+warn+' fa fa-exclamation-triangle"></i> <a target=blank href='+host+'>'+host+'</a></td>' +
+                '<td id=height-'+host+'>'+data.network.height+'</td>' +
+                '<td id=hashrate-'+host+'>'+hashrate+'</td>' +
+                '<td id=miners-'+host+'>'+miners+'</td>' +
+                '<td style="font-size: 0.6em;" id=lastBlockFound-'+host+'>' + jQuery.timeago(new Date(parseInt(data.pool.lastBlockFound))) + '</td>' +
+                '<td id=donation-'+host+'>'+calculateDonations(data)+'%</td>' +
+                '<td id=totalFee-'+host+'>'+calculateTotalFee(data)+'%</td>' +
+            '</tr>');
+        });
+    });
+
+    function calculateTotalFee(data) {
+        var totalFee = data.config.fee;
+        if(data.config.hasOwnProperty("coreDonation")){
+            totalFee += data.config.donation;
+            totalFee += data.config.coreDonation;
+        } else {
+            for ( property in data.config.donation) {
+                if (data.config.donation.hasOwnProperty(property)) {
+                    totalFee += data.config.donation[property];
+                }
+            }
+        }
+        return totalFee;
+    }
+
+    function calculateDonations(data) {
+        var totalDonations = 0;
+        if(data.config.hasOwnProperty("coreDonation")){
+            totalDonations += data.config.donation;
+            totalDonations += data.config.coreDonation;
+        } else {
+            for ( property in data.config.donation) {
+                if (data.config.donation.hasOwnProperty(property)) {
+                    totalDonations += data.config.donation[property];
+                }
+            }
+        }
+        return totalDonations;
+    }
+</script>

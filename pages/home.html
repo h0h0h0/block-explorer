@@ -1,0 +1,78 @@
+<style>
+    #lastHash{
+        font-family: 'Inconsolata', monospace;
+        font-size: 0.8em;
+    }
+</style>
+
+<div id="siteInfo">
+    <div class="page-header hidden-xs">
+            <h1>
+                <img class="logo" src="pool.png" alt="IRD Iridium cryptonote coin logo"><br>
+                Global network, blockchain explorer and pools status for Iridium <small>(IRD)</small>
+            </h1>
+    </div>
+
+    <div class="stats">
+        <h3>Latest News</h3>
+        <div>19/02/2018 : This is the block explorer for <a href="http://ird.cash" target="_blank">Iridium</a></div>
+        <div>27/01/2018 : <a href="http://ird.cash/hard-fork-success/" target="_blank">Hard fork is a success !</a></div>
+    </div>
+
+</div>
+<div class="row">
+    <div class="col-md-4 stats">
+        <h3>Network</h3>
+        <div><i class="fa fa-tachometer"></i>Global Hash Rate: <span id="networkHashrate"></span></div>
+        <div><i class="fa fa-clock-o"></i> Block Found: <span id="networkLastBlockFound"></span></div>
+        <div><i class="fa fa-unlock-alt"></i> Difficulty: <span id="networkDifficulty"></span></div>
+        <div><i class="fa fa-bars"></i> Blockchain Height: <span id="blockchainHeight"></span></div>
+        <div><i class="fa fa-money"></i> Last Reward: <span id="networkLastReward"></span></div>
+        <div><i class="fa fa-paw"></i> Last Hash: <a id="lastHash" target="_blank"></a></div>
+    </div>
+</div>
+
+<script>
+    currentPage = {
+        destroy: function(){
+            $('#networkLastBlockFound').timeago('dispose');
+        },
+        init: function(){
+        },
+        update: function(){
+            $('#networkLastBlockFound').timeago('update', new Date(lastStats.network.timestamp * 1000).toISOString());
+            updateText('networkHashrate', getReadableHashRateString(lastStats.network.difficulty / coinDifficultyTarget) + '/sec');
+            updateText('networkDifficulty', lastStats.network.difficulty.toString());
+            updateText('blockchainHeight', lastStats.network.height.toString());
+            updateText('networkLastReward', getReadableCoins(lastStats.network.reward, 4));
+            updateText('lastHash', lastStats.network.hash.substr(0, 13) + '...').setAttribute('href', getBlockchainUrl(lastStats.network.hash));
+        }
+    };
+
+    $('#networkLastBlockFound').timeago();
+
+    function getReadableTime(seconds){
+        var units = [ [60, 'second'], [60, 'minute'], [24, 'hour'],
+            [7, 'day'], [4, 'week'], [12, 'month'], [1, 'year'] ];
+        function formatAmounts(amount, unit){
+            var rounded = Math.round(amount);
+            return '' + rounded + ' ' + unit + (rounded > 1 ? 's' : '');
+        }
+        var amount = seconds;
+        for (var i = 0; i < units.length; i++){
+            if (amount < units[i][0])
+                return formatAmounts(amount, units[i][1]);
+            amount = amount / units[i][0];
+        }
+        return formatAmounts(amount,  units[units.length - 1][1]);
+    }
+
+
+    function loadStatistics () {
+        $.get(api + '/stats', function (stats) {
+            if (stats) {
+                showStats(stats)
+            }
+        });
+    }
+</script>
